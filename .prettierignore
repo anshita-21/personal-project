@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+.angular
+prisma/migrations
+playwright-report
+test-results

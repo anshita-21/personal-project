@@ -1,0 +1,20 @@
+{
+  "name": "@examprep/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Framework-independent contracts (types + Zod validation schemas) shared by the API and the Angular app.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}

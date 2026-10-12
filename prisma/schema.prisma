@@ -1,0 +1,213 @@
+// ---------------------------------------------------------------------------
+// Exam Prep & Assessment Platform - data model
+//
+// Conventions
+//   * Prisma's default identifier casing is kept (PascalCase tables,
+//     camelCase columns) so the schema file is the single source of truth and
+//     no @map noise obscures the model. Raw SQL therefore quotes identifiers.
+//   * Every index below exists because a specific query needs it; the query is
+//     named in the comment above it. See docs/architecture.md.
+//   * Grading-relevant values are SNAPSHOT onto the attempt when it starts, so
+//     editing an exam later can never retroactively change a past result.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  /// scrypt hash, formatted "scrypt$N$r$p$salt$derivedKey". Never leaves the API.
+  passwordHash String
+  role         Role     @default(STUDENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  attempts     Attempt[]
+  sessions     Session[]
+  authoredExams Exam[]   @relation("ExamAuthor")
+}
+
+/// One row per issued auth cookie. The JWT carries this row's id as its `jti`,
+/// which makes logout and "revoke everywhere" possible without waiting for the
+/// token to expire - a stateless JWT alone cannot be revoked.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Query: revoke every session of a user (password change / logout all).
+  @@index([userId])
+  // Query: periodic pruning of expired rows.
+  @@index([expiresAt])
+}
+
+model Topic {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  exams     Exam[]
+  questions Question[]
+}
+
+model Exam {
+  id              String     @id @default(cuid())
+  slug            String     @unique
+  title           String
+  description     String
+  topicId         String
+  difficulty      Difficulty
+  durationMinutes Int
+  passPercentage  Int        @default(60)
+  status          ExamStatus @default(DRAFT)
+  publishedAt     DateTime?
+  createdById     String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  topic     Topic     @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  createdBy User?     @relation("ExamAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  questions Question[]
+  attempts  Attempt[]
+
+  // Query: the student catalogue - WHERE status = 'PUBLISHED' ORDER BY createdAt DESC.
+  @@index([status, createdAt])
+  // Query: catalogue filtered by topic / difficulty facets.
+  @@index([topicId])
+  @@index([difficulty])
+}
+
+model Question {
+  id          String   @id @default(cuid())
+  examId      String
+  topicId     String
+  prompt      String
+  explanation String?
+  /// 1-based display order inside the exam.
+  position    Int
+  points      Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  exam    Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  topic   Topic            @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  options QuestionOption[]
+  answers AttemptAnswer[]
+
+  // Invariant: no two questions of an exam share a slot. Makes "the Nth
+  // question" unambiguous for the exam runner and for autosave recovery.
+  @@unique([examId, position])
+  @@index([topicId])
+}
+
+model QuestionOption {
+  id         String  @id @default(cuid())
+  questionId String
+  text       String
+  /// Exactly one option per question is correct (enforced by the validation
+  /// schema and by a publish-time check - see ExamService.publishChecks).
+  isCorrect  Boolean @default(false)
+  position   Int
+
+  question Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  AttemptAnswer[] @relation("SelectedOption")
+
+  @@unique([questionId, position])
+  @@index([questionId])
+}
+
+model Attempt {
+  id     String        @id @default(cuid())
+  userId String
+  examId String
+  status AttemptStatus @default(IN_PROGRESS)
+
+  /// Server clock only. The deadline is fixed at start time and never recomputed.
+  startedAt   DateTime  @default(now())
+  expiresAt   DateTime
+  submittedAt DateTime?
+
+  // ---- snapshots taken at start, so later exam edits cannot rewrite history
+  durationMinutes Int
+  passPercentage  Int
+  questionCount   Int
+  maxScore        Int
+
+  // ---- grading results, null until the attempt reaches a terminal status
+  score            Int?
+  percentage       Float?
+  correctCount     Int?
+  incorrectCount   Int?
+  unansweredCount  Int?
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exam    Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  answers AttemptAnswer[]
+
+  // Query: "my attempt history", newest first.
+  @@index([userId, startedAt])
+  // Query: admin per-exam statistics.
+  @@index([examId, status])
+  // Query: the expiry sweep - WHERE status = 'IN_PROGRESS' AND expiresAt < now().
+  @@index([status, expiresAt])
+}
+
+model AttemptAnswer {
+  id               String   @id @default(cuid())
+  attemptId        String
+  questionId       String
+  selectedOptionId String?
+  /// Null while the attempt is in progress; set once at grading time.
+  isCorrect        Boolean?
+  awardedPoints    Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  attempt        Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption QuestionOption? @relation("SelectedOption", fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  // Invariant: one answer row per question per attempt. This is what makes
+  // autosave an idempotent upsert instead of an append-only log.
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.angular/
+.env
+.env.local
+.pgdata/
+*.log
+playwright-report/
+test-results/
+blob-report/
+.DS_Store

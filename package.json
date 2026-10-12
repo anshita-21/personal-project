@@ -1,0 +1,63 @@
+{
+  "name": "examprep",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Exam Prep & Assessment Platform - Angular + Node/Express + Prisma + PostgreSQL",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "db:up": "node scripts/pg.mjs start",
+    "db:down": "node scripts/pg.mjs stop",
+    "db:status": "node scripts/pg.mjs status",
+    "db:reset": "node scripts/pg.mjs reset",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "migrate:dev": "prisma migrate dev --schema prisma/schema.prisma",
+    "migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts",
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @examprep/api",
+    "dev:web": "npm run start -w @examprep/web",
+    "build": "npm run build -w @examprep/shared && npm run build -w @examprep/api && npm run build -w @examprep/web",
+    "typecheck": "npm run typecheck -w @examprep/shared && npm run typecheck -w @examprep/api && npm run typecheck -w @examprep/web",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,html,css,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,html,css,json,md}\"",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "npm run test -w @examprep/api",
+    "test:web": "npm run test -w @examprep/web",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "setup": "npm install && npm run db:up && npm run prisma:generate && npm run migrate:deploy && npm run seed",
+    "e2e:api": "tsx apps/api/src/server.ts",
+    "e2e:web": "node scripts/e2e-web.mjs",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "postinstall": "prisma generate --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@playwright/test": "1.56.0",
+    "@types/node": "22.19.1",
+    "concurrently": "9.2.1",
+    "eslint": "9.39.1",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.6.2",
+    "prisma": "6.19.3",
+    "tsx": "4.20.6",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.46.1"
+  },
+  "optionalDependencies": {
+    "@embedded-postgres/darwin-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/darwin-x64": "17.10.0-beta.17",
+    "@embedded-postgres/linux-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/linux-x64": "17.10.0-beta.17",
+    "@embedded-postgres/windows-x64": "17.10.0-beta.17"
+  }
+}
