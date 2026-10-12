@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { env } from '../config/env';
+import { isAllowedOrigin } from '../config/env';
 import { forbidden } from '../errors/app-error';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -30,8 +30,10 @@ export const verifyRequestOrigin: RequestHandler = (req, _res, next) => {
     return;
   }
 
-  if (!env.CORS_ORIGINS.includes(origin)) {
-    next(forbidden('Cross-origin request blocked.'));
+  if (!isAllowedOrigin(origin)) {
+    // Naming the rejected origin makes a misconfiguration diagnosable; the
+    // caller already knows its own origin, so nothing is disclosed.
+    next(forbidden(`Cross-origin request blocked: ${origin} is not an allowed origin.`));
     return;
   }
 

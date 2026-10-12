@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
-import { env, isTest } from './config/env';
+import { env, isAllowedOrigin, isTest } from './config/env';
 import { logger } from './logger';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import { globalLimiter } from './middleware/rate-limit';
@@ -73,11 +73,11 @@ export function createApp(): Express {
       // An allow-list, never a reflected wildcard: `credentials: true` with a
       // reflected origin would let any site read authenticated responses.
       origin(origin, callback) {
-        // Reflecting the origin only when it is allow-listed. A disallowed
-        // origin gets NO Access-Control-Allow-Origin header (so the browser
-        // blocks the response) rather than an exception - throwing here would
-        // surface as a 500 instead of a clean, documented rejection.
-        callback(null, !origin || env.CORS_ORIGINS.includes(origin));
+        // Reflecting the origin only when it is allowed. A disallowed origin
+        // gets NO Access-Control-Allow-Origin header (so the browser blocks the
+        // response) rather than an exception - throwing here would surface as a
+        // 500 instead of a clean, documented rejection.
+        callback(null, !origin || isAllowedOrigin(origin));
       },
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],

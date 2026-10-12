@@ -102,3 +102,33 @@ export const isTest = env.NODE_ENV === 'test';
 
 /** Resolved here because the default depends on NODE_ENV. */
 export const rateLimitEnabled: boolean = env.RATE_LIMIT_ENABLED ?? !isTest;
+
+/**
+ * Hostnames that always refer to the developer's own machine.
+ *
+ * `localhost` and `127.0.0.1` are DIFFERENT origins to a browser, and so is
+ * every port. Outside production, any loopback origin is accepted so that
+ * opening the app at http://127.0.0.1:4200 instead of http://localhost:4200 -
+ * or on a second dev-server port - does not produce a baffling 403. Nothing is
+ * relaxed in production, where only CORS_ORIGINS is honoured.
+ */
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+export function isAllowedOrigin(origin: string): boolean {
+  if (env.CORS_ORIGINS.includes(origin)) {
+    return true;
+  }
+  if (isProduction) {
+    return false;
+  }
+
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      LOOPBACK_HOSTNAMES.has(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
